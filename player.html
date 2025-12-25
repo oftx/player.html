@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Bilingual Player Pro</title>
+    <style>
+        :root {
+            --primary-color: #fff143;
+            --bg-color: #0a0a0a;
+            --card-bg: #1a1a1a;
+            --border-color: #333;
+            --text-main: #eee;
+            --text-dim: #888;
+            --success-color: #4caf50;
+            --error-color: #f44336;
+        }
+
+        * { box-sizing: border-box; }
+
+        body { 
+            background: var(--bg-color); 
+            color: var(--text-main); 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+            margin: 0;
+            height: 100vh; 
+            overflow: hidden; 
+            display: flex;
+            justify-content: center;
+        }
+
+        .main-container { 
+            width: 100%; 
+            max-width: 1000px;
+            padding: 20px;
+            display: flex; gap: 20px; 
+            height: 100%; position: relative;
+        }
+
+        .left-panel {
+            flex: 1; min-width: 0;
+            display: flex; flex-direction: column;
+            overflow-y: auto; padding-right: 5px;
+        }
+        .left-panel::-webkit-scrollbar { width: 6px; }
+        .left-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+        .right-panel {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 0; opacity: 0; flex-shrink: 0;
+        }
+        .right-panel.open { width: 450px; opacity: 1; border-left: 1px solid var(--border-color); }
+
+        @media (max-width: 960px) {
+            body { height: auto; overflow-y: auto; overflow-x: hidden; }
+            .main-container { flex-direction: column; height: auto; padding: 15px; }
+            .left-panel { overflow: visible; height: auto; }
+            .right-panel { width: 100% !important; height: 0; border-left: none; border-top: 1px solid var(--border-color); }
+            .right-panel.open { height: 500px; margin-top: 10px; }
+            .editor-title { display: none; }
+        }
+
+        #debug { 
+            font-family: monospace; font-size: 13px; 
+            padding: 12px 16px; margin-bottom: 20px; 
+            background: rgba(0, 255, 0, 0.05);
+            border-left: 4px solid #0f0; border-radius: 4px; color: #0f0;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid var(--border-color);
+            flex-shrink: 0;
+            group: video-group;
+        }
+        
+        video { width: 100%; display: block; outline: none; cursor: pointer; }
+
+        .custom-controls-bar {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            padding: 20px 15px 15px 15px;
+            display: flex; flex-direction: column; gap: 8px;
+            opacity: 0; transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        .video-wrapper:hover .custom-controls-bar,
+        .custom-controls-bar:hover { opacity: 1; pointer-events: auto; }
+
+        .progress-container {
+            width: 100%; height: 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            cursor: pointer;
+            position: relative;
+            display: flex; align-items: center;
+        }
+        .progress-filled {
+            height: 100%; background: var(--primary-color);
+            border-radius: 3px; width: 0%; pointer-events: none;
+            position: relative;
+        }
+        .progress-thumb {
+            width: 12px; height: 12px; background: #fff;
+            border-radius: 50%; position: absolute; right: -6px; top: -3px;
+            transform: scale(0); transition: transform 0.2s;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        .progress-container:hover .progress-thumb { transform: scale(1); }
+        
+        .seek-input {
+            position: absolute; top: -5px; left: 0; width: 100%; height: 16px;
+            opacity: 0; cursor: pointer; z-index: 2; margin: 0;
+        }
+
+        .controls-row {
+            display: flex; justify-content: space-between; align-items: center;
+            color: #eee; font-size: 13px; font-family: monospace;
+        }
+        .left-controls, .right-controls { display: flex; align-items: center; gap: 15px; }
+        
+        .icon-btn {
+            background: none; border: none; color: #fff; cursor: pointer;
+            padding: 0; font-size: 18px; display: flex; align-items: center;
+            opacity: 0.8; transition: 0.2s;
+        }
+        .icon-btn:hover { opacity: 1; color: var(--primary-color); }
+        
+        .time-display { font-variant-numeric: tabular-nums; user-select: none; }
+
+        .volume-container { display: flex; align-items: center; gap: 8px; width: 100px; }
+        .volume-slider {
+            -webkit-appearance: none; width: 100%; height: 4px; border-radius: 2px;
+            background: rgba(255,255,255,0.3); outline: none;
+        }
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%;
+            background: #fff; cursor: pointer;
+        }
+
+        .sub-display-area {
+            width: 100%; min-height: 200px; margin-top: 20px;
+            padding: 40px 20px; text-align: center;
+            background: var(--card-bg); border-radius: 12px; 
+            border: 1px solid var(--border-color);
+            display: flex; flex-direction: column; justify-content: center;
+            position: relative;
+        }
+
+        .sub-settings-bar {
+            position: absolute; top: 15px; right: 15px;
+            display: flex; gap: 10px; align-items: center;
+            opacity: 0.6; transition: opacity 0.2s;
+        }
+        .sub-settings-bar:hover { opacity: 1; }
+
+        .settings-btn {
+            background: transparent; border: 1px solid #444; color: #aaa;
+            font-size: 11px; padding: 2px 8px; border-radius: 4px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .settings-btn.active { color: var(--primary-color); border-color: var(--primary-color); background: rgba(255,241,67,0.1); }
+        
+        .mini-select {
+            background: #111; color: #aaa; border: 1px solid #444;
+            font-size: 11px; padding: 2px; border-radius: 4px; outline: none;
+        }
+
+        .trans-line { font-size: 32px; font-weight: 900; color: #fff; margin-bottom: 15px; line-height: 1.3; }
+        .src-line { font-size: 18px; color: var(--text-dim); line-height: 1.2; }
+        .placeholder-text { color: var(--text-dim); font-style: italic; font-size: 14px; }
+
+        .word { 
+            display: inline-block; white-space: pre-wrap; margin: 0 1px; 
+            transition: all 0.2s; cursor: pointer; border-radius: 3px;
+        }
+        .word:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+        .word.active { color: var(--primary-color); text-shadow: 0 0 5px rgba(255,241,67,0.5); transform: translateY(-2px); }
+
+        .main-controls {
+            display: flex; justify-content: center; align-items: center;
+            gap: 15px; margin-top: 20px; margin-bottom: 10px;
+        }
+        .ctrl-btn {
+            background: #2a2a2a; color: #eee; border: 1px solid #444;
+            border-radius: 6px; padding: 10px 24px; cursor: pointer;
+            font-size: 14px; transition: 0.2s;
+            display: flex; align-items: center; gap: 8px;
+            min-width: 100px; justify-content: center;
+        }
+        .ctrl-btn:hover { background: #333; border-color: #666; transform: translateY(-1px); }
+        .ctrl-btn:active { transform: translateY(1px); }
+
+        .inputs { 
+            margin-top: 20px; display: flex; flex-wrap: wrap; gap: 15px;
+            background: var(--card-bg); padding: 20px; 
+            border-radius: 12px; border: 1px solid var(--border-color);
+            align-items: flex-end; margin-bottom: 20px;
+        }
+        .file-input-group { flex: 1; min-width: 200px; }
+        .file-input-group label { display: block; margin-bottom: 8px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; }
+        input[type="file"] { width: 100%; background: #222; padding: 6px; border-radius: 6px; border: 1px dashed #444; color: #aaa; font-size: 12px; }
+        input[type="file"]::-webkit-file-upload-button { background: #444; color: #fff; border: none; padding: 4px 10px; border-radius: 4px; margin-right: 10px; cursor: pointer; }
+
+        .btn-editor {
+            height: 38px; padding: 0 20px; background: #333; color: var(--primary-color);
+            border: 1px solid var(--primary-color); border-radius: 6px; cursor: pointer;
+            transition: 0.2s; white-space: nowrap;
+        }
+        .btn-editor:hover, .btn-editor.active { background: var(--primary-color); color: #000; }
+
+        .editor-header {
+            padding: 10px 15px; background: #222; border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center; gap: 10px;
+        }
+        .header-left, .header-right { display: flex; align-items: center; gap: 8px; }
+        .editor-title { color: #fff; font-size: 13px; margin-left: 5px;}
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); }
+        .filename-input {
+            background: #111; border: 1px solid #444; color: #aaa;
+            padding: 5px 8px; border-radius: 4px; font-size: 12px;
+            font-family: inherit; width: 140px; text-align: right;
+        }
+        .header-btn {
+            background: #333; color: #eee; border: 1px solid #555;
+            padding: 5px 12px; font-size: 12px; border-radius: 4px;
+            cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 4px;
+        }
+        .header-btn:hover { background: var(--primary-color); color: #000; border-color: var(--primary-color); }
+        .close-editor-link { cursor: pointer; color: #666; font-size: 20px; line-height: 1; margin-left: 5px; }
+
+        #json-editor {
+            flex: 1; background: #111; color: #a6e22e; border: none; padding: 15px;
+            font-family: 'Consolas', monospace; font-size: 13px; resize: none; outline: none; line-height: 1.5;
+        }
+        #json-editor.error { border-bottom: 3px solid var(--error-color); }
+        #json-editor.success { border-bottom: 3px solid var(--success-color); }
+
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        
+        <div class="left-panel">
+            <div id="debug">🚀 准备就绪，请上传媒体文件和 JSON 轨迹数据</div>
+
+            <div class="video-wrapper" id="video-wrapper">
+                <video id="v"></video>
+                
+                <div class="custom-controls-bar">
+                    <div class="progress-container">
+                        <div class="progress-filled" id="progress-filled">
+                            <div class="progress-thumb"></div>
+                        </div>
+                        <input type="range" class="seek-input" id="seek-bar" min="0" max="100" step="0.1" value="0">
+                    </div>
+                    
+                    <div class="controls-row">
+                        <div class="left-controls">
+                            <button class="icon-btn" id="play-pause-btn">▶</button>
+                            <span class="time-display">
+                                <span id="current-time">00:00</span> / <span id="duration">00:00</span>
+                            </span>
+                        </div>
+                        
+                        <div class="right-controls">
+                            <div class="volume-container">
+                                <span style="font-size:16px">🔊</span>
+                                <input type="range" class="volume-slider" id="volume-bar" min="0" max="1" step="0.1" value="1">
+                            </div>
+                            <button class="icon-btn" id="fullscreen-btn" title="全屏">⛶</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="sub-area" class="sub-display-area">
+                <div class="sub-settings-bar">
+                    <button class="settings-btn" id="loop-btn" title="单句循环模式">🔁 循环</button>
+                    <select id="speed-select" class="mini-select" title="播放速度">
+                        <option value="0.5">0.5x</option>
+                        <option value="0.75">0.75x</option>
+                        <option value="1.0" selected>1.0x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2.0">2.0x</option>
+                    </select>
+                </div>
+
+                <div id="placeholder" class="placeholder-text">点击单词可跳转进度<br>等待 JSON 数据加载...</div>
+                <div id="trans-box" class="trans-line"></div>
+                <div id="src-box" class="src-line"></div>
+            </div>
+
+            <div class="main-controls">
+                <button class="ctrl-btn" id="prev-btn">⏮ 上一句</button>
+                <button class="ctrl-btn" id="replay-btn">↺ 重播</button>
+                <button class="ctrl-btn" id="next-btn">下一句 ⏭</button>
+            </div>
+
+            <div class="inputs">
+                <div class="file-input-group">
+                    <label>1. 媒体文件</label>
+                    <input type="file" id="v-file" accept="video/*,audio/*">
+                </div>
+                <div class="file-input-group">
+                    <label>2. 轨迹数据 (JSON)</label>
+                    <input type="file" id="j-file" accept=".json">
+                </div>
+                <button class="btn-editor" id="toggle-editor-btn">打开 Json 编辑器</button>
+            </div>
+        </div>
+
+        <div class="right-panel" id="right-panel">
+            <div class="editor-header">
+                <div class="header-left">
+                    <span id="editor-status" class="status-dot"></span>
+                    <span class="editor-title">JSON 源码</span>
+                </div>
+                <div class="header-right">
+                    <input type="text" id="filename-input" class="filename-input" placeholder="文件名.json">
+                    <button id="save-btn" class="header-btn"><span>💾</span> 保存</button>
+                    <span class="close-editor-link" id="close-panel-btn">&times;</span>
+                </div>
+            </div>
+            <textarea id="json-editor" spellcheck="false" placeholder="// 拖入 JSON 文件或在此粘贴..."></textarea>
+        </div>
+
+    </div>
+
+    <script>
+        const media = document.getElementById('v');
+        const videoWrapper = document.getElementById('video-wrapper');
+        const transBox = document.getElementById('trans-box');
+        const srcBox = document.getElementById('src-box');
+        const placeholder = document.getElementById('placeholder');
+        const debug = document.getElementById('debug');
+        
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const seekBar = document.getElementById('seek-bar');
+        const progressFilled = document.getElementById('progress-filled');
+        const currentTimeEl = document.getElementById('current-time');
+        const durationEl = document.getElementById('duration');
+        const volumeBar = document.getElementById('volume-bar');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+
+        const rightPanel = document.getElementById('right-panel');
+        const toggleBtn = document.getElementById('toggle-editor-btn');
+        const closePanelBtn = document.getElementById('close-panel-btn');
+        const jsonEditor = document.getElementById('json-editor');
+        const editorStatus = document.getElementById('editor-status');
+        const saveBtn = document.getElementById('save-btn');
+        const filenameInput = document.getElementById('filename-input');
+
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const replayBtn = document.getElementById('replay-btn');
+        const loopBtn = document.getElementById('loop-btn');
+        const speedSelect = document.getElementById('speed-select');
+
+        let segments = [];
+        let currentSegIdx = -1;
+        let rawJsonData = []; 
+        let isLoopMode = false; 
+        let skipLoopCheck = false; 
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`;
+        }
+
+        function togglePlay() {
+            if (media.paused || media.ended) {
+                media.play();
+                playPauseBtn.innerText = "⏸";
+            } else {
+                media.pause();
+                playPauseBtn.innerText = "▶";
+            }
+        }
+
+        playPauseBtn.onclick = togglePlay;
+        media.onclick = togglePlay;
+
+        media.addEventListener('play', () => playPauseBtn.innerText = "⏸");
+        media.addEventListener('pause', () => playPauseBtn.innerText = "▶");
+
+        media.addEventListener('timeupdate', () => {
+            if (!isNaN(media.duration)) {
+                const pct = (media.currentTime / media.duration) * 100;
+                seekBar.value = pct;
+                progressFilled.style.width = pct + "%";
+                currentTimeEl.innerText = formatTime(media.currentTime);
+            }
+        });
+
+        media.addEventListener('loadedmetadata', () => {
+            durationEl.innerText = formatTime(media.duration);
+        });
+
+        seekBar.addEventListener('input', () => {
+            const time = (seekBar.value / 100) * media.duration;
+            media.currentTime = time;
+            progressFilled.style.width = seekBar.value + "%";
+            skipLoopCheck = true;
+        });
+
+        volumeBar.addEventListener('input', (e) => {
+            media.volume = e.target.value;
+        });
+
+        fullscreenBtn.onclick = () => {
+            if (!document.fullscreenElement) {
+                if (videoWrapper.requestFullscreen) videoWrapper.requestFullscreen();
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        };
+
+        document.getElementById('v-file').onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                media.src = URL.createObjectURL(file);
+                debug.innerText = `🎵 已加载媒体: ${file.name}`;
+                seekBar.value = 0;
+                progressFilled.style.width = "0%";
+                playPauseBtn.innerText = "▶";
+            }
+        };
+
+        function loadSegmentsData(data) {
+            let rawList = data.segments || data;
+            if (!Array.isArray(rawList)) {
+                const keys = Object.keys(data);
+                const arrayKey = keys.find(k => Array.isArray(data[k]));
+                rawList = arrayKey ? data[arrayKey] : [];
+            }
+            segments = rawList.map((s, index) => {
+                let tWords = s.trans_words || [];
+                let sWords = s.src_words || s.words || [];
+                
+                if (tWords.length === 0 && sWords.length > 0) {
+                    tWords = sWords;
+                    sWords = [];
+                }
+
+                let autoStart = s.start, autoEnd = s.end;
+                if (autoStart === undefined && (tWords.length > 0 || sWords.length > 0)) {
+                   const first = tWords.length > 0 ? tWords[0] : sWords[0];
+                   const last = tWords.length > 0 ? tWords[tWords.length-1] : sWords[sWords.length-1];
+                   autoStart = first ? first.start : 0;
+                   autoEnd = last ? last.end : 0;
+                }
+                
+                return {
+                    ...s,
+                    id: s.id ?? index,
+                    start: parseFloat(autoStart || 0),
+                    end: parseFloat(autoEnd || 0),
+                    tWords, sWords
+                };
+            });
+            rawJsonData = data; 
+            if (segments.length > 0) {
+                placeholder.style.display = 'none';
+                currentSegIdx = -1;
+                return true;
+            }
+            return false;
+        }
+
+        document.getElementById('j-file').onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                filenameInput.value = file.name;
+                const text = await file.text();
+                const data = JSON.parse(text);
+                if (loadSegmentsData(data)) {
+                    debug.innerText = `✅ 字幕匹配成功: ${segments.length} 条句子`;
+                    jsonEditor.value = JSON.stringify(data, null, 2);
+                    editorStatus.style.backgroundColor = 'var(--success-color)';
+                } else {
+                    debug.innerText = "⚠️ 解析成功但未找到数据";
+                }
+            } catch (err) {
+                debug.innerText = "❌ JSON 解析失败";
+            }
+        };
+
+        function handleWordClick(e) {
+            const span = e.target.closest('.word');
+            if (span && span.dataset.s) {
+                skipLoopCheck = true; 
+                media.currentTime = parseFloat(span.dataset.s);
+                media.play();
+            }
+        }
+        transBox.addEventListener('click', handleWordClick);
+        srcBox.addEventListener('click', handleWordClick);
+
+        function jumpToSegment(index) {
+            if (index >= 0 && index < segments.length) {
+                skipLoopCheck = true; 
+                media.currentTime = segments[index].start;
+                media.play();
+            }
+        }
+
+        prevBtn.onclick = () => {
+            if (segments.length === 0) return;
+            if (currentSegIdx !== -1) {
+                if (currentSegIdx > 0) jumpToSegment(currentSegIdx - 1);
+                else jumpToSegment(0);
+            } else {
+                const now = media.currentTime;
+                let prevIdx = -1;
+                for(let i=0; i<segments.length; i++) {
+                    if (segments[i].end < now) prevIdx = i;
+                    else break;
+                }
+                if (prevIdx !== -1) jumpToSegment(prevIdx);
+                else jumpToSegment(0);
+            }
+        };
+
+        nextBtn.onclick = () => {
+            if (currentSegIdx !== -1) {
+                jumpToSegment(currentSegIdx + 1);
+            } else {
+                const now = media.currentTime;
+                const nextIdx = segments.findIndex(s => s.start > now);
+                jumpToSegment(nextIdx !== -1 ? nextIdx : 0);
+            }
+        };
+
+        replayBtn.onclick = () => {
+            if (currentSegIdx !== -1) jumpToSegment(currentSegIdx);
+        };
+
+        loopBtn.onclick = () => {
+            isLoopMode = !isLoopMode;
+            if (isLoopMode) loopBtn.classList.add('active');
+            else loopBtn.classList.remove('active');
+        };
+
+        speedSelect.onchange = (e) => {
+            media.playbackRate = parseFloat(e.target.value);
+        };
+
+        document.addEventListener('keydown', (e) => {
+            if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+            switch(e.key) {
+                case 'ArrowLeft': prevBtn.click(); e.preventDefault(); break;
+                case 'ArrowRight': nextBtn.click(); e.preventDefault(); break;
+                case 'r': case 'R': replayBtn.click(); break;
+                case ' ': 
+                    e.preventDefault(); 
+                    togglePlay();
+                    break;
+            }
+        });
+
+        function toggleEditor() {
+            const isOpen = rightPanel.classList.contains('open');
+            if (isOpen) {
+                rightPanel.classList.remove('open');
+                toggleBtn.classList.remove('active');
+                toggleBtn.innerText = "打开 Json 编辑器";
+            } else {
+                rightPanel.classList.add('open');
+                toggleBtn.classList.add('active');
+                toggleBtn.innerText = "关闭 Json 编辑器";
+                if (!jsonEditor.value && segments.length > 0) {
+                    jsonEditor.value = JSON.stringify(rawJsonData, null, 2);
+                    editorStatus.style.backgroundColor = 'var(--success-color)';
+                }
+                if (!filenameInput.value) filenameInput.value = "subtitles.json";
+            }
+        }
+        toggleBtn.onclick = toggleEditor;
+        closePanelBtn.onclick = toggleEditor;
+
+        jsonEditor.addEventListener('input', () => {
+            try {
+                const text = jsonEditor.value;
+                if(!text.trim()) return;
+                const data = JSON.parse(text);
+                loadSegmentsData(data);
+                jsonEditor.className = 'success';
+                editorStatus.style.backgroundColor = 'var(--success-color)';
+                debug.innerText = `✏️ 编辑生效: ${segments.length} 条句子`;
+                currentSegIdx = -1; transBox.innerHTML = ""; srcBox.innerHTML = "";
+            } catch (e) {
+                jsonEditor.className = 'error';
+                editorStatus.style.backgroundColor = 'var(--error-color)';
+            }
+        });
+
+        saveBtn.onclick = () => {
+            const content = jsonEditor.value;
+            if (!content) return;
+            let name = filenameInput.value.trim() || "fixed_subtitles.json";
+            if (!name.toLowerCase().endsWith('.json')) name += '.json';
+            const blob = new Blob([content], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        function run() {
+            if (segments.length > 0) {
+                const now = media.currentTime;
+                
+                if (isLoopMode && currentSegIdx !== -1 && !skipLoopCheck) {
+                    const seg = segments[currentSegIdx];
+                    let loopBuffer = 0.2;
+                    if (currentSegIdx < segments.length - 1) {
+                        const nextSeg = segments[currentSegIdx + 1];
+                        const gap = nextSeg.start - seg.end;
+                        if (gap < loopBuffer) {
+                            loopBuffer = Math.max(0, gap - 0.02);
+                        }
+                    }
+
+                    if (now > seg.end + loopBuffer) {
+                        media.currentTime = seg.start;
+                    }
+                }
+
+                const foundIdx = segments.findIndex(s => now >= s.start && now <= s.end);
+
+                if (foundIdx !== -1) {
+                    let allowSwitch = true;
+                    if (isLoopMode && currentSegIdx !== -1 && foundIdx === currentSegIdx + 1 && !skipLoopCheck) {
+                         const currentSeg = segments[currentSegIdx];
+                         if (now >= currentSeg.end) {
+                             allowSwitch = false; 
+                         }
+                    }
+
+                    if (allowSwitch && currentSegIdx !== foundIdx) {
+                        currentSegIdx = foundIdx;
+                        const seg = segments[foundIdx];
+                        transBox.innerHTML = seg.tWords.map(w => `<span class="word" data-s="${w.start}" data-e="${w.end}">${w.word}</span>`).join("");
+                        srcBox.innerHTML = seg.sWords.map(w => `<span class="word" data-s="${w.start}" data-e="${w.end}">${w.word}</span>`).join("");
+                    }
+                    updateWordHighlight(transBox, now);
+                    updateWordHighlight(srcBox, now);
+                } else {
+                    if (currentSegIdx !== -1 && !isLoopMode) {
+                        transBox.innerHTML = ""; srcBox.innerHTML = "";
+                        currentSegIdx = -1;
+                    }
+                }
+            }
+            
+            skipLoopCheck = false; 
+            
+            requestAnimationFrame(run);
+        }
+
+        function updateWordHighlight(container, now) {
+            const spans = container.children;
+            for (let span of spans) {
+                const s = parseFloat(span.dataset.s), e = parseFloat(span.dataset.e);
+                if (now >= s && now <= e) span.classList.add('active');
+                else span.classList.remove('active');
+            }
+        }
+        requestAnimationFrame(run);
+    </script>
+</body>
+</html>
