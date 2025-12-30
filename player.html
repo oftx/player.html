@@ -696,8 +696,9 @@
                         currentSegIdx = foundIdx;
                         const seg = segments[foundIdx];
                         const transText = seg.translation || seg.trans || seg.trans_text || seg.text;
+                        const srcText = seg.src_text || seg.source || seg.text;
                         transBox.innerHTML = renderSegmentWords(seg.tWords, transText);
-                        srcBox.innerHTML = renderSegmentWords(seg.sWords, seg.text);
+                        srcBox.innerHTML = renderSegmentWords(seg.sWords, srcText);
                     }
                     updateWordHighlight(transBox, now);
                     updateWordHighlight(srcBox, now);
