@@ -647,7 +647,19 @@
                     }
                 }
 
-                const foundIdx = segments.findIndex(s => now >= s.start && now <= s.end);
+                // Prioritize the segment with the latest start time to handle overlaps correctly
+                let foundIdx = -1;
+                let maxStart = -Infinity;
+                
+                for (let i = 0; i < segments.length; i++) {
+                    const s = segments[i];
+                    if (now >= s.start && now <= s.end) {
+                        if (s.start >= maxStart) {
+                            foundIdx = i;
+                            maxStart = s.start;
+                        }
+                    }
+                }
 
                 if (foundIdx !== -1) {
                     let allowSwitch = true;
