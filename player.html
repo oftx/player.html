@@ -627,6 +627,28 @@
             URL.revokeObjectURL(url);
         };
 
+        function renderSegmentWords(words, text) {
+            if (!words || !words.length) return "";
+            if (text) {
+                let html = "";
+                let cursor = 0;
+                const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                for (let w of words) {
+                    const idx = text.indexOf(w.word, cursor);
+                    if (idx !== -1) {
+                        html += esc(text.substring(cursor, idx));
+                        html += `<span class="word" data-s="${w.start}" data-e="${w.end}">${w.word}</span>`;
+                        cursor = idx + w.word.length;
+                    } else {
+                        html += `<span class="word" data-s="${w.start}" data-e="${w.end}">${w.word}</span>`;
+                    }
+                }
+                html += esc(text.substring(cursor));
+                return html;
+            }
+            return words.map(w => `<span class="word" data-s="${w.start}" data-e="${w.end}">${w.word}</span>`).join(" ");
+        }
+
         function run() {
             if (segments.length > 0) {
                 const now = media.currentTime;
@@ -673,8 +695,9 @@
                     if (allowSwitch && currentSegIdx !== foundIdx) {
                         currentSegIdx = foundIdx;
                         const seg = segments[foundIdx];
-                        transBox.innerHTML = seg.tWords.map(w => `<span class="word" data-s="${w.start}" data-e="${w.end}">${w.word}</span>`).join("");
-                        srcBox.innerHTML = seg.sWords.map(w => `<span class="word" data-s="${w.start}" data-e="${w.end}">${w.word}</span>`).join("");
+                        const transText = seg.translation || seg.trans || seg.trans_text || seg.text;
+                        transBox.innerHTML = renderSegmentWords(seg.tWords, transText);
+                        srcBox.innerHTML = renderSegmentWords(seg.sWords, seg.text);
                     }
                     updateWordHighlight(transBox, now);
                     updateWordHighlight(srcBox, now);
